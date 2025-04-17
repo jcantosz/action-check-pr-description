@@ -1,0 +1,31 @@
+name: PR Template Validation
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+jobs:
+  validate-template:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetch all history for all branches and tags
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate PR Template
+        uses: jcantosz/action-check-pr-description@main
+        with:
+          config_path: .github/pr-validation-config.yml
+          fail_on_error: true
+          github_token: ${{ secrets.GITHUB_TOKEN }}

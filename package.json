@@ -7,7 +7,7 @@
   "scripts": {
     "test": "jest",
     "test:watch": "jest --watch",
-    "build": "ncc build src/index.js -o dist",
+    "build": "ncc build index.js -o dist",
     "prepare": "npm run build",
     "cli": "node cli.js"
   },

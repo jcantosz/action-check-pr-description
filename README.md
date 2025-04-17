@@ -69,9 +69,29 @@ validation:
 
 This approach is most secure as users cannot modify the validation rules when creating a PR.
 
-### 2. PR Description Front Matter
+### 2. External Configuration File
 
-If a valid configuration is not found in the PR template file, the action will look for front matter in the PR description:
+If a valid configuration is not found in the PR template file, the action will look for an external configuration file (default: `.github/pr-validation-config.yml`):
+
+```yaml
+issue_number: required
+require_labels: true
+semantic_commits:
+  enabled: true
+  types:
+    - feat
+    - fix
+    # ... other types
+sections:
+  "Type of review":
+    rule: any_checked
+  "Review Checklist":
+    rule: any_checked
+```
+
+### 3. PR Description Front Matter (Last Resort)
+
+As a last resort, if no configuration is found in either the template or external config file, the action will check for front matter in the PR description itself:
 
 ```markdown
 ---
@@ -92,25 +112,7 @@ validation:
 # Your PR content here
 ```
 
-### 3. External Configuration File
-
-As a last resort, the action will look for a configuration file (default: `.github/pr-validation-config.yml`):
-
-```yaml
-issue_number: required
-require_labels: true
-semantic_commits:
-  enabled: true
-  types:
-    - feat
-    - fix
-    # ... other types
-sections:
-  "Type of review":
-    rule: any_checked
-  "Review Checklist":
-    rule: any_checked
-```
+Note: Using PR description front matter is not recommended for enforcement purposes as users can modify these rules to bypass validation.
 
 ## Configuration Options
 
@@ -133,12 +135,12 @@ Each section can have the following rules:
 
 ## Inputs
 
-| Input             | Description                                      | Required | Default                                |
-| ----------------- | ------------------------------------------------ | -------- | -------------------------------------- |
-| `template_path`   | Path to PR template with validation rules        | No       | `.github/PULL_REQUEST_TEMPLATE.md`     |
-| `config_path`     | Path to custom validation config                 | No       | `.github/pr-validation-config.yml`     |
-| `fail_on_error`   | Whether to fail the workflow if validation fails | No       | `true`                                 |
-| `github_token`    | GitHub token for API access                      | No       | `${{ github.token }}`                  |
+| Input           | Description                                      | Required | Default                            |
+| --------------- | ------------------------------------------------ | -------- | ---------------------------------- |
+| `template_path` | Path to PR template with validation rules        | No       | `.github/PULL_REQUEST_TEMPLATE.md` |
+| `config_path`   | Path to custom validation config                 | No       | `.github/pr-validation-config.yml` |
+| `fail_on_error` | Whether to fail the workflow if validation fails | No       | `true`                             |
+| `github_token`  | GitHub token for API access                      | No       | `${{ github.token }}`              |
 
 ## Outputs
 
