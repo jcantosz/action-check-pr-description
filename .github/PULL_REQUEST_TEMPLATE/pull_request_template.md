@@ -1,4 +1,4 @@
----
+<!--
 validation:
   issue_number: required
   require_labels: true
@@ -24,7 +24,7 @@ validation:
     "Other checklist":
       rule: all_checked
       enforce_nested: true
----
+-->
 
 ## Description
 
