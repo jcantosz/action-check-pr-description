@@ -1,11 +1,11 @@
-name: PR Template Validation
+name: PR Template Validation Single Value
 
 on:
   pull_request:
     types: [opened, edited, synchronize, reopened]
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-config-yaml
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-single
   cancel-in-progress: true
 
 jobs:
@@ -19,17 +19,9 @@ jobs:
         with:
           fetch-depth: 0 # Fetch all history for all branches and tags
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
-      - name: Install dependencies
-        run: npm ci
-
       - name: Validate PR Template
         uses: jcantosz/action-check-pr-description@main
         with:
-          config_file: .github/pr-validation-config.yml
+          config_file: .github/pr-validation-config-single-value.yml
           fail_on_error: true
           github_token: ${{ secrets.GITHUB_TOKEN }}
