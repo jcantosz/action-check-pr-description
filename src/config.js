@@ -9,10 +9,23 @@ import * as core from "@actions/core";
  * @returns {string|null} Extracted frontmatter content or null if not found
  */
 function extractFrontMatter(content) {
-  const frontMatterMatch = content.match(/^---\s*\n([\s\S]*?)\n---\s*\n/);
+  // Try to match frontmatter directly in the document
+  let frontMatterMatch = content.match(/^---\s*\n([\s\S]*?)\n---\s*\n/);
+
+  if (!frontMatterMatch) {
+    // If not found directly, try to find it inside an HTML comment
+    frontMatterMatch = content.match(/<!--\s*\n?---\s*\n([\s\S]*?)\n---\s*\n?-->/);
+
+    if (!frontMatterMatch) {
+      // As a last resort, try to find any --- block inside HTML comments
+      frontMatterMatch = content.match(/<!--[\s\S]*?---\s*\n([\s\S]*?)\n---[\s\S]*?-->/);
+    }
+  }
+
   if (!frontMatterMatch) {
     return null;
   }
+
   return frontMatterMatch[1];
 }
 
