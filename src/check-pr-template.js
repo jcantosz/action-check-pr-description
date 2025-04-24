@@ -146,15 +146,17 @@ async function validatePullRequest({ github, context }) {
 
   try {
     core.info("🔧 Loading validation configuration...");
-    validationConfig = loadValidationConfig(prBody);
+    // Pass GitHub client and context to allow fetching from specified branch
+    validationConfig = await loadValidationConfig(prBody, github, context);
+
+    // Make sure we have a valid object
+    if (!validationConfig) {
+      validationConfig = {};
+    }
+
     core.debug(`Loaded validation config: ${JSON.stringify(validationConfig, null, 2)}`);
   } catch (error) {
     core.setFailed(`❌ Failed to parse validation config: ${error.message}`);
-    return false;
-  }
-
-  if (!validationConfig) {
-    core.setFailed("❌ No validation configuration found");
     return false;
   }
 
@@ -163,8 +165,8 @@ async function validatePullRequest({ github, context }) {
   // Track validation steps for summary
   const validationSteps = [];
 
-  // Validate labels if required
-  if (validationConfig.require_labels) {
+  // Validate labels if require_labels is explicitly set to true
+  if (validationConfig.require_labels === true) {
     core.info("🏷️ Validating PR labels...");
     const errorCount = errors.length;
     validateLabels(context.payload.pull_request, errors);
@@ -176,7 +178,7 @@ async function validatePullRequest({ github, context }) {
     core.debug("Label validation skipped (not required in config)");
   }
 
-  // Validate issue reference if required
+  // Validate issue reference only if issue_number is explicitly set to "required"
   if (validationConfig.issue_number === "required") {
     core.info("🔗 Validating issue reference...");
     const errorCount = errors.length;
@@ -189,8 +191,8 @@ async function validatePullRequest({ github, context }) {
     core.debug("Issue reference validation skipped (not required in config)");
   }
 
-  // Validate semantic commits if enabled
-  if (validationConfig.semantic_commits?.enabled) {
+  // Validate semantic commits only if semantic_commits.enabled is explicitly set to true
+  if (validationConfig.semantic_commits?.enabled === true) {
     core.info("📝 Validating semantic commits...");
     const errorCount = errors.length;
     await validateSemanticCommits(github, context, validationConfig.semantic_commits, errors);
@@ -202,8 +204,8 @@ async function validatePullRequest({ github, context }) {
     core.debug("Semantic commit validation skipped (not enabled in config)");
   }
 
-  // Validate section checkboxes
-  if (validationConfig.sections) {
+  // Validate section checkboxes only if sections is defined and non-empty
+  if (validationConfig.sections && Object.keys(validationConfig.sections).length > 0) {
     core.info("📋 Validating PR template sections...");
 
     Object.entries(validationConfig.sections).forEach(([sectionName, sectionConfig]) => {

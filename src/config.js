@@ -302,6 +302,7 @@ function getTemplatePaths() {
 async function loadValidationConfig(prBody, github = null, context = null) {
   core.info("🔍 Loading validation configuration...");
   let configFilePath = null;
+  let loadedConfig = null;
 
   // 1. Use the config file if specified via input
   const configFileInput = core.getInput("config_file");
@@ -363,10 +364,11 @@ async function loadValidationConfig(prBody, github = null, context = null) {
     const configLoader = getConfigLoaderForFile(configFilePath);
 
     if (configLoader) {
-      const config = await configLoader(configFilePath, github, context);
-      if (config) {
+      loadedConfig = await configLoader(configFilePath, github, context);
+      if (loadedConfig) {
         core.info(`✅ Successfully loaded validation config from ${configFilePath}`);
-        return config;
+        core.debug(`Loaded validation config: ${JSON.stringify(loadedConfig, null, 2)}`);
+        return loadedConfig;
       } else {
         core.warning(`⚠️ Failed to extract valid configuration from ${configFilePath}`);
       }
