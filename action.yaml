@@ -3,12 +3,8 @@ description: "Ensures PR descriptions follow standardized templates with proper 
 author: "PR Validator Team"
 
 inputs:
-  config_path:
-    description: "Path to custom validation configuration file (default uses PR front matter or .github/pr-validation-config.yml)"
-    required: false
-    default: ".github/pr-validation-config.yml"
-  template_path:
-    description: "Path to the PR template markdown file containing validation rules (takes precedence over PR body frontmatter)"
+  config_file:
+    description: "Path to configuration file (supports .md files with frontmatter or direct .yml/.yaml config files)"
     required: false
     default: ".github/PULL_REQUEST_TEMPLATE.md"
   fail_on_error:
@@ -21,7 +17,7 @@ inputs:
 
 outputs:
   validation-result:
-    description: "Result of the validation (passed/failed)"
+    description: "Result of validation (passed/failed)"
   validation-errors:
     description: "List of validation errors found"
 

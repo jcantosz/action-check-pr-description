@@ -25,55 +25,54 @@ jobs:
   validate-pr:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Validate PR Description
         uses: your-org/pr-description-enforce@v1
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          # Optional: Path to a PR template with validation rules
-          # template_path: '.github/PULL_REQUEST_TEMPLATE.md'
-          # Optional: Path to a custom config file
-          # config_path: '.github/my-custom-config.yml'
+          # Path to configuration file (.md files use frontmatter, .yml/.yaml are direct config)
+          # config_file: '.github/PULL_REQUEST_TEMPLATE.md'
 ```
 
 ## Configuration
 
-The validation rules can be configured in three ways (in order of precedence):
+The validation rules can be configured in two ways:
 
-### 1. PR Template File (Most Secure)
+### 1. Markdown PR Template with Front Matter (Most Secure)
 
-Add YAML front matter to your PR template file (default: `.github/PULL_REQUEST_TEMPLATE.md`):
+Add YAML front matter, in a comment, to your PR template file (default: `.github/PULL_REQUEST_TEMPLATE.md`):
 
 ```markdown
----
+<!--
 validation:
   issue_number: required
   require_labels: true
-  semantic_commits:
-    enabled: true
-    types:
-      - feat
-      - fix
-      - docs
-      # ... other types
-  sections:
-    "Type of review":
-      rule: any_checked
-    "Review Checklist":
-      rule: any_checked
+semantic_commits:
+  enabled: true
+  types:
+  - feat
+  - fix
+  - docs
+  # ... other types
+sections:
+  "Type of review":
+    rule: any_checked
+  "Review Checklist":
+    rule: any_checked
+
 ---
+-->
 
 # Your PR template content here
 ```
 
-This approach is most secure as users cannot modify the validation rules when creating a PR.
+### 2. Direct YAML Configuration File
 
-### 2. External Configuration File
-
-If a valid configuration is not found in the PR template file, the action will look for an external configuration file (default: `.github/pr-validation-config.yml`):
+Alternatively, you can use a direct YAML configuration file by setting the `config_file` parameter to a `.yml` or `.yaml` file:
 
 ```yaml
+# In .github/pr-validation-config.yml
 issue_number: required
 require_labels: true
 semantic_commits:
@@ -89,30 +88,9 @@ sections:
     rule: any_checked
 ```
 
-### 3. PR Description Front Matter (Last Resort)
+### Fallback: PR Body Frontmatter (Not Recommended for Enforcement)
 
-As a last resort, if no configuration is found in either the template or external config file, the action will check for front matter in the PR description itself:
-
-```markdown
----
-validation:
-  issue_number: required
-  require_labels: true
-  semantic_commits:
-    enabled: true
-    types:
-      - feat
-      - fix
-      - docs
-  sections:
-    "Type of review":
-      rule: any_checked
----
-
-# Your PR content here
-```
-
-Note: Using PR description front matter is not recommended for enforcement purposes as users can modify these rules to bypass validation.
+As a last resort, if the specified configuration file is not found, the action will look for frontmatter in the PR description itself. This approach is not recommended for enforcement purposes as users can modify these rules to bypass validation.
 
 ## Configuration Options
 
@@ -135,12 +113,11 @@ Each section can have the following rules:
 
 ## Inputs
 
-| Input           | Description                                      | Required | Default                            |
-| --------------- | ------------------------------------------------ | -------- | ---------------------------------- |
-| `template_path` | Path to PR template with validation rules        | No       | `.github/PULL_REQUEST_TEMPLATE.md` |
-| `config_path`   | Path to custom validation config                 | No       | `.github/pr-validation-config.yml` |
-| `fail_on_error` | Whether to fail the workflow if validation fails | No       | `true`                             |
-| `github_token`  | GitHub token for API access                      | No       | `${{ github.token }}`              |
+| Input           | Description                                                                       | Required | Default                            |
+| --------------- | --------------------------------------------------------------------------------- | -------- | ---------------------------------- |
+| `config_file`   | Path to configuration file (.md with frontmatter or .yml/.yaml for direct config) | No       | `.github/PULL_REQUEST_TEMPLATE.md` |
+| `fail_on_error` | Whether to fail the workflow if validation fails                                  | No       | `true`                             |
+| `github_token`  | GitHub token for API access                                                       | No       | `${{ github.token }}`              |
 
 ## Outputs
 

@@ -82,6 +82,49 @@ function getSectionContent(prBody, sectionName) {
 }
 
 /**
+ * Writes validation summary to GitHub Actions step summary
+ * @param {Object[]} validationSteps - Array of validation steps and their results
+ * @param {boolean} success - Whether overall validation was successful
+ * @param {string[]} errors - Array of validation errors
+ */
+async function writeStepSummary(validationSteps, success, errors) {
+  try {
+    core.debug("Writing validation results to step summary");
+
+    // Start with a header
+    core.summary.addHeading("PR Description Validation Results").addEOL();
+
+    // Add table header
+    core.summary
+      .addTable([
+        [
+          { data: "Validation Check", header: true },
+          { data: "Result", header: true },
+        ],
+        ...validationSteps.map((step) => [step.name, step.status]),
+      ])
+      .addEOL();
+
+    // Add overall status
+    if (success) {
+      core.summary.addHeading("✅ Overall: PASSED", 3).addEOL();
+    } else {
+      core.summary.addHeading("❌ Overall: FAILED", 3).addEOL().addHeading("Errors:", 4).addEOL();
+
+      // Add error list
+      for (const error of errors) {
+        core.summary.addRaw(`- ${error}`).addEOL();
+      }
+    }
+
+    // Write the summary to the GitHub Actions summary
+    await core.summary.write();
+  } catch (error) {
+    core.warning(`Failed to write step summary: ${error.message}`);
+  }
+}
+
+/**
  * Validates a pull request against configured rules
  * @param {Object} params - The parameters object
  * @param {Object} params.github - GitHub API client
@@ -186,6 +229,10 @@ async function validatePullRequest({ github, context }) {
   } else {
     core.debug("Section validation skipped (no sections defined in config)");
   }
+
+  // Write summary to GitHub Actions step summary
+  const success = errors.length === 0;
+  await writeStepSummary(validationSteps, success, errors);
 
   // Report validation results
   if (errors.length > 0) {
