@@ -6,7 +6,7 @@ inputs:
   config_file:
     description: "Path to configuration file (supports .md files with frontmatter or direct .yml/.yaml config files)"
     required: false
-    default: ".github/PULL_REQUEST_TEMPLATE.md"
+    default: ".github/pull_request_template.md"
   config_branch:
     description: "Branch to fetch the configuration file from. If not specified, uses the current branch."
     required: false
