@@ -22,6 +22,7 @@ jobs:
       - name: Validate PR Template
         uses: jcantosz/action-check-pr-description@main
         with:
-          config_file: .github/pr-validation-config-single-value.yml
+          config_file: .github/pr-validation-config-single-validator.yml
           fail_on_error: true
           github_token: ${{ secrets.GITHUB_TOKEN }}
+          config_branch: main

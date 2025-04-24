@@ -55,69 +55,143 @@ function parseValidationConfig(content, isFrontMatter = false) {
 }
 
 /**
- * Load configuration from a markdown file with frontmatter
- * @param {string} filePath - Path to the markdown file
- * @returns {Object|null} Validation configuration or null if not found/invalid
+ * Fetches file content from GitHub repository
+ * @param {Object} github - GitHub API client
+ * @param {Object} context - GitHub Actions context
+ * @param {string} filePath - Path to the file within the repo
+ * @param {string} [branch=null] - Branch to fetch from or null for default branch
+ * @returns {Promise<string|null>} File content or null if not found
  */
-function loadConfigFromMarkdown(filePath) {
-  core.info(`📄 Processing Markdown file with frontmatter: ${filePath}`);
+async function fetchFileFromGitHub(github, context, filePath, branch = null) {
+  const { owner, repo } = context.repo;
+  const ref = branch || context.ref;
+
+  core.debug(`Fetching file from GitHub: ${filePath} (branch: ${ref})`);
 
   try {
-    const fileContents = fs.readFileSync(filePath, "utf8");
-    const frontMatterContent = extractFrontMatter(fileContents);
+    const response = await github.request("GET /repos/{owner}/{repo}/contents/{path}", {
+      owner,
+      repo,
+      path: filePath,
+      ref: ref,
+    });
 
-    if (!frontMatterContent) {
-      core.warning(`❌ No frontmatter found in markdown file: ${filePath}`);
+    if (response.status !== 200) {
+      core.warning(`Failed to fetch ${filePath} from branch ${ref}. Status: ${response.status}`);
       return null;
     }
 
-    core.info("📄 Found front matter in configuration file");
-    const config = parseValidationConfig(frontMatterContent, true);
-
-    if (!config) {
-      core.warning("❌ Frontmatter found but missing 'validation' section or invalid YAML");
-      return null;
-    }
-
-    core.info("✅ Successfully loaded validation config from markdown frontmatter");
-    core.debug(`Loaded config: ${JSON.stringify(config, null, 2)}`);
-    return config;
+    // Content is Base64 encoded
+    const content = Buffer.from(response.data.content, "base64").toString("utf8");
+    core.debug(`Successfully fetched ${filePath} from branch ${ref} (${content.length} bytes)`);
+    return content;
   } catch (error) {
-    core.warning(`⚠️ Error processing markdown file: ${error.message}`);
+    core.warning(`Error fetching ${filePath} from branch ${ref}: ${error.message}`);
     return null;
   }
 }
 
 /**
- * Load configuration from a YAML file
- * @param {string} filePath - Path to the YAML file
+ * Load configuration from a markdown file with frontmatter
+ * @param {string} filePath - Path to the markdown file
+ * @param {Object} [github=null] - GitHub API client for remote fetching
+ * @param {Object} [context=null] - GitHub Actions context for remote fetching
  * @returns {Object|null} Validation configuration or null if not found/invalid
  */
-function loadConfigFromYaml(filePath) {
-  core.info(`📄 Processing YAML configuration file: ${filePath}`);
+async function loadConfigFromMarkdown(filePath, github = null, context = null) {
+  core.info(`📄 Processing Markdown file with frontmatter: ${filePath}`);
 
-  try {
-    const fileContents = fs.readFileSync(filePath, "utf8");
+  let fileContents;
+  const configBranch = process.env.CONFIG_BRANCH;
 
-    if (!fileContents.trim()) {
-      core.warning("❌ Config file exists but is empty");
+  // Try to fetch from GitHub if branch specified and GitHub client provided
+  if (configBranch && github && context) {
+    core.info(`Attempting to fetch ${filePath} from branch: ${configBranch}`);
+    fileContents = await fetchFileFromGitHub(github, context, filePath, configBranch);
+
+    if (!fileContents) {
+      core.warning(`Could not fetch file from specified branch. Falling back to local file.`);
+    }
+  }
+
+  // Fall back to local file if remote fetch failed or wasn't requested
+  if (!fileContents) {
+    try {
+      fileContents = fs.readFileSync(filePath, "utf8");
+    } catch (error) {
+      core.warning(`⚠️ Error reading markdown file: ${error.message}`);
       return null;
     }
+  }
 
-    const config = parseValidationConfig(fileContents);
+  const frontMatterContent = extractFrontMatter(fileContents);
 
-    if (!config) {
-      core.warning("❌ Config file parsed but resulted in empty configuration");
-      return null;
-    }
-
-    core.info("✅ Successfully loaded validation config from YAML file");
-    core.debug(`Loaded config: ${JSON.stringify(config, null, 2)}`);
-    return config;
-  } catch (error) {
-    core.warning(`⚠️ Failed to parse YAML file: ${error.message}`);
+  if (!frontMatterContent) {
+    core.warning(`❌ No frontmatter found in markdown file: ${filePath}`);
     return null;
   }
+
+  core.info("📄 Found front matter in configuration file");
+  const config = parseValidationConfig(frontMatterContent, true);
+
+  if (!config) {
+    core.warning("❌ Frontmatter found but missing 'validation' section or invalid YAML");
+    return null;
+  }
+
+  core.info("✅ Successfully loaded validation config from markdown frontmatter");
+  core.debug(`Loaded config: ${JSON.stringify(config, null, 2)}`);
+  return config;
+}
+
+/**
+ * Load configuration from a YAML file
+ * @param {string} filePath - Path to the YAML file
+ * @param {Object} [github=null] - GitHub API client for remote fetching
+ * @param {Object} [context=null] - GitHub Actions context for remote fetching
+ * @returns {Object|null} Validation configuration or null if not found/invalid
+ */
+async function loadConfigFromYaml(filePath, github = null, context = null) {
+  core.info(`📄 Processing YAML configuration file: ${filePath}`);
+
+  let fileContents;
+  const configBranch = process.env.CONFIG_BRANCH;
+
+  // Try to fetch from GitHub if branch specified and GitHub client provided
+  if (configBranch && github && context) {
+    core.info(`Attempting to fetch ${filePath} from branch: ${configBranch}`);
+    fileContents = await fetchFileFromGitHub(github, context, filePath, configBranch);
+
+    if (!fileContents) {
+      core.warning(`Could not fetch file from specified branch. Falling back to local file.`);
+    }
+  }
+
+  // Fall back to local file if remote fetch failed or wasn't requested
+  if (!fileContents) {
+    try {
+      fileContents = fs.readFileSync(filePath, "utf8");
+    } catch (error) {
+      core.warning(`⚠️ Error reading YAML file: ${error.message}`);
+      return null;
+    }
+  }
+
+  if (!fileContents.trim()) {
+    core.warning("❌ Config file exists but is empty");
+    return null;
+  }
+
+  const config = parseValidationConfig(fileContents);
+
+  if (!config) {
+    core.warning("❌ Config file parsed but resulted in empty configuration");
+    return null;
+  }
+
+  core.info("✅ Successfully loaded validation config from YAML file");
+  core.debug(`Loaded config: ${JSON.stringify(config, null, 2)}`);
+  return config;
 }
 
 /**
@@ -169,11 +243,11 @@ function getConfigLoaderForFile(filePath) {
 }
 
 /**
- * Check if file exists (case insensitive)
+ * Check if file exists locally (case insensitive)
  * @param {string} filePath - Path to check
  * @returns {string|null} Actual path with correct casing if found, null otherwise
  */
-function findFileIgnoreCase(filePath) {
+function findLocalFileIgnoreCase(filePath) {
   try {
     // Check direct existence first (fastest path)
     if (fs.existsSync(filePath)) {
@@ -220,50 +294,76 @@ function getTemplatePaths() {
 /**
  * Loads validation configuration from specified file or PR body frontmatter as last resort
  * @param {string} prBody - The pull request description body
- * @returns {Object} Validation configuration object
+ * @param {Object} [github=null] - GitHub API client
+ * @param {Object} [context=null] - GitHub Actions context
+ * @returns {Promise<Object>} Validation configuration object
  * @throws {Error} If config cannot be loaded or parsed
  */
-function loadValidationConfig(prBody) {
+async function loadValidationConfig(prBody, github = null, context = null) {
   core.info("🔍 Loading validation configuration...");
   let configFilePath = null;
 
   // 1. Use the config file if specified via input
   const configFileInput = core.getInput("config_file");
+
+  // Check for specific branch config
+  const configBranch = process.env.CONFIG_BRANCH || null;
+
+  if (configBranch) {
+    core.info(`🌿 Using configuration from branch: ${configBranch}`);
+  }
+
   if (configFileInput) {
     core.info(`📝 Checking specified configuration file: ${configFileInput}`);
-    configFilePath = findFileIgnoreCase(configFileInput);
 
-    if (!configFilePath) {
-      core.warning(`⚠️ Specified config file not found: ${configFileInput}`);
+    // If we're using a remote branch, we don't need to check if the file exists locally
+    if (configBranch && github && context) {
+      configFilePath = configFileInput; // We'll try to fetch it later
+    } else {
+      configFilePath = findLocalFileIgnoreCase(configFileInput);
+
+      if (!configFilePath) {
+        core.warning(`⚠️ Specified config file not found locally: ${configFileInput}`);
+      }
     }
   }
 
   // 2. If no config file specified or not found, try default locations
   if (!configFilePath) {
-    core.info("📝 Looking for PR template in default locations (case insensitive):");
+    core.info("📝 Looking for PR template in default locations:");
 
     const templatePaths = getTemplatePaths();
-    for (const templatePath of templatePaths) {
-      core.info(`  - Checking ${templatePath}`);
-      configFilePath = findFileIgnoreCase(templatePath);
 
-      if (configFilePath) {
-        core.info(`✅ Found PR template at: ${configFilePath}`);
-        break;
-      }
+    // If using a remote branch, we'll try to fetch from it
+    if (configBranch && github && context) {
+      // Just use the first template path for now - we'll try to fetch it
+      configFilePath = templatePaths[0];
+      core.info(`Will attempt to fetch template from branch ${configBranch}`);
     }
+    // Otherwise look for local files
+    else {
+      for (const templatePath of templatePaths) {
+        core.info(`  - Checking ${templatePath}`);
+        configFilePath = findLocalFileIgnoreCase(templatePath);
 
-    if (!configFilePath) {
-      core.warning("⚠️ No PR template found in any of the default locations");
+        if (configFilePath) {
+          core.info(`✅ Found PR template at: ${configFilePath}`);
+          break;
+        }
+      }
+
+      if (!configFilePath) {
+        core.warning("⚠️ No PR template found in any of the default locations");
+      }
     }
   }
 
-  // Try to load config from found file
+  // Try to load config from found file path
   if (configFilePath) {
     const configLoader = getConfigLoaderForFile(configFilePath);
 
     if (configLoader) {
-      const config = configLoader(configFilePath);
+      const config = await configLoader(configFilePath, github, context);
       if (config) {
         core.info(`✅ Successfully loaded validation config from ${configFilePath}`);
         return config;
@@ -285,12 +385,15 @@ function loadValidationConfig(prBody) {
   core.error("❌ No valid validation configuration found in any source");
   core.error("Checked the following locations:");
   if (configFileInput) {
-    core.error(`  - Specified config_file: ${configFileInput}`);
+    core.error(`  - Specified config_file: ${configFileInput}${configBranch ? ` (branch: ${configBranch})` : ""}`);
   }
-  getTemplatePaths().forEach((p) => core.error(`  - ${p}`));
+  getTemplatePaths().forEach((p) => core.error(`  - ${p}${configBranch ? ` (branch: ${configBranch})` : ""}`));
   core.error("  - PR body frontmatter");
 
-  throw new Error("No valid validation configuration found");
+  // Return an empty configuration instead of throwing an error
+  // This way, if no config is found, no validation will be performed
+  core.info("⚠️ Using empty configuration - no validations will be performed");
+  return {};
 }
 
 export {
@@ -301,6 +404,7 @@ export {
   loadConfigFromYaml,
   loadConfigFromPrBody,
   getConfigLoaderForFile,
-  findFileIgnoreCase,
+  findLocalFileIgnoreCase,
   getTemplatePaths,
+  fetchFileFromGitHub,
 };

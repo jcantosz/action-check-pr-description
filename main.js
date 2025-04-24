@@ -12,12 +12,18 @@ export async function run() {
 
     // Get inputs
     const configPath = core.getInput("config_path");
+    const configBranch = core.getInput("config_branch");
     const failOnError = core.getInput("fail_on_error") === "true";
     const token = core.getInput("github_token");
 
     // Log action configuration
     core.info("📋 Action Configuration:");
     core.info(`  - Using ${configPath ? "custom config path: " + configPath : "default config path"}`);
+    if (configBranch) {
+      core.info(`  - Using config from branch: ${configBranch}`);
+    } else {
+      core.info("  - Using config from current branch");
+    }
     core.info(`  - Fail on error: ${failOnError ? "Yes" : "No"}`);
 
     // Create an authenticated basic Octokit instance
@@ -27,6 +33,12 @@ export async function run() {
     if (configPath) {
       process.env.CUSTOM_CONFIG_PATH = configPath;
       core.debug(`Set custom config path environment variable to: ${configPath}`);
+    }
+
+    // Store config branch if provided
+    if (configBranch) {
+      process.env.CONFIG_BRANCH = configBranch;
+      core.debug(`Set config branch environment variable to: ${configBranch}`);
     }
 
     // Create context with octokit instance

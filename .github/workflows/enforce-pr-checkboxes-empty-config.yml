@@ -25,3 +25,4 @@ jobs:
           config_file: .github/pr-validation-config-empty.yml
           fail_on_error: true
           github_token: ${{ secrets.GITHUB_TOKEN }}
+          config_branch: main

@@ -24,3 +24,4 @@ jobs:
         with:
           fail_on_error: true
           github_token: ${{ secrets.GITHUB_TOKEN }}
+          config_branch: main
