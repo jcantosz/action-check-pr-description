@@ -37,6 +37,8 @@ jobs:
           config_branch: main
       - name: Comment validation result on PR
         if: always()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh pr comment ${{ github.event.pull_request.number }} \
             --body "Validation result: ${{ steps.validate-template.outputs.validation-result }}\nErrors: ${{ steps.validate-template.outputs.validation-errors }}" \

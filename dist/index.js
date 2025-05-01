@@ -41762,6 +41762,12 @@ function getTemplatePaths() {
 
 /**
  * Loads validation configuration from specified file or PR body frontmatter as last resort
+ * Following this priority order:
+ * 1. User specified config file (from config_file input)
+ * 2. Template paths on the specified branch (if config_branch provided)
+ * 3. Template paths on the current branch
+ * 4. PR body frontmatter
+ * 
  * @param {string} prBody - The pull request description body
  * @param {Object} [github=null] - GitHub API client
  * @param {Object} [context=null] - GitHub Actions context
@@ -41770,99 +41776,122 @@ function getTemplatePaths() {
  */
 async function loadValidationConfig(prBody, github = null, context = null) {
   core.info("🔍 Loading validation configuration...");
-  let configFilePath = null;
-  let loadedConfig = null;
-
-  // 1. Use the config file if specified via input
+  
   const configFileInput = core.getInput("config_file");
-
-  // Check for specific branch config
   const configBranch = process.env.CONFIG_BRANCH || null;
-
+  
   if (configBranch) {
-    core.info(`🌿 Using configuration from branch: ${configBranch}`);
+    core.info(`🌿 Config branch specified: ${configBranch}`);
   }
-
+  
+  let config = null;
+  
+  // Step 1: Check user provided config file
   if (configFileInput) {
-    core.info(`📝 Checking specified configuration file: ${configFileInput}`);
-
-    // If we're using a remote branch, we don't need to check if the file exists locally
+    core.info(`📝 Step 1: Checking user specified config file: ${configFileInput}`);
+    
+    // Try on specified branch if provided
     if (configBranch && github && context) {
-      configFilePath = configFileInput; // We'll try to fetch it later
-    } else {
-      configFilePath = findLocalFileIgnoreCase(configFileInput);
-
-      if (!configFilePath) {
-        core.warning(`⚠️ Specified config file not found locally: ${configFileInput}`);
-      }
-    }
-  }
-
-  // 2. If no config file specified or not found, try default locations
-  if (!configFilePath) {
-    core.info("📝 Looking for PR template in default locations:");
-
-    const templatePaths = getTemplatePaths();
-
-    // If using a remote branch, we'll try to fetch from it
-    if (configBranch && github && context) {
-      // Just use the first template path for now - we'll try to fetch it
-      configFilePath = templatePaths[0];
-      core.info(`Will attempt to fetch template from branch ${configBranch}`);
-    }
-    // Otherwise look for local files
-    else {
-      for (const templatePath of templatePaths) {
-        core.info(`  - Checking ${templatePath}`);
-        configFilePath = findLocalFileIgnoreCase(templatePath);
-
-        if (configFilePath) {
-          core.info(`✅ Found PR template at: ${configFilePath}`);
-          break;
+      core.info(`  Attempting to load ${configFileInput} from branch: ${configBranch}`);
+      const configLoader = getConfigLoaderForFile(configFileInput);
+      
+      if (configLoader) {
+        config = await configLoader(configFileInput, github, context);
+        if (config) {
+          core.info(`✅ Successfully loaded validation config from ${configFileInput} on branch ${configBranch}`);
+          core.debug(`Branch config loaded: ${JSON.stringify(config)}`);
+          return config;
         }
       }
-
-      if (!configFilePath) {
-        core.warning("⚠️ No PR template found in any of the default locations");
+    }
+    
+    // Try locally (current branch)
+    const localFilePath = findLocalFileIgnoreCase(configFileInput);
+    if (localFilePath) {
+      core.info(`  Found local config file: ${localFilePath}`);
+      const configLoader = getConfigLoaderForFile(localFilePath);
+      
+      if (configLoader) {
+        config = await configLoader(localFilePath);
+        if (config) {
+          core.info(`✅ Successfully loaded validation config from local file: ${localFilePath}`);
+          core.debug(`Local config loaded: ${JSON.stringify(config)}`);
+          return config;
+        }
+      }
+    } else {
+      core.warning(`⚠️ User specified config file not found locally: ${configFileInput}`);
+    }
+  }
+  
+  // Step 2: Check template paths on the specified branch
+  if (configBranch && github && context) {
+    core.info(`📝 Step 2: Looking for PR templates on branch: ${configBranch}`);
+    const templatePaths = getTemplatePaths();
+    
+    for (const templatePath of templatePaths) {
+      core.info(`  Checking ${templatePath} on branch ${configBranch}`);
+      const configLoader = getConfigLoaderForFile(templatePath);
+      
+      if (configLoader) {
+        config = await configLoader(templatePath, github, context);
+        if (config) {
+          core.info(`✅ Found valid PR template on branch ${configBranch}: ${templatePath}`);
+          return config;
+        }
+      }
+    }
+    
+    core.warning(`⚠️ No valid PR template found on branch ${configBranch}`);
+  }
+  
+  // Step 3: Check template paths on the current branch
+  core.info(`📝 Step 3: Looking for PR templates on the current branch`);
+  const templatePaths = getTemplatePaths();
+  
+  for (const templatePath of templatePaths) {
+    core.info(`  Checking ${templatePath} locally`);
+    const localFilePath = findLocalFileIgnoreCase(templatePath);
+    
+    if (localFilePath) {
+      core.info(`  Found local template: ${localFilePath}`);
+      const configLoader = getConfigLoaderForFile(localFilePath);
+      
+      if (configLoader) {
+        config = await configLoader(localFilePath);
+        if (config) {
+          core.info(`✅ Successfully loaded validation config from local template: ${localFilePath}`);
+          return config;
+        }
       }
     }
   }
-
-  // Try to load config from found file path
-  if (configFilePath) {
-    const configLoader = getConfigLoaderForFile(configFilePath);
-
-    if (configLoader) {
-      loadedConfig = await configLoader(configFilePath, github, context);
-      if (loadedConfig) {
-        core.info(`✅ Successfully loaded validation config from ${configFilePath}`);
-        core.debug(`Loaded validation config: ${JSON.stringify(loadedConfig, null, 2)}`);
-        return loadedConfig;
-      } else {
-        core.warning(`⚠️ Failed to extract valid configuration from ${configFilePath}`);
-      }
-    }
-  }
-
-  // 3. If all else fails, try to read frontmatter from PR body
-  core.info("📄 No valid configuration found in files, checking PR body frontmatter as last resort");
-  const prBodyConfig = loadConfigFromPrBody(prBody);
-  if (prBodyConfig) {
+  
+  // Step 4: Check PR body as last resort
+  core.info(`📝 Step 4: Checking PR body frontmatter as last resort`);
+  config = loadConfigFromPrBody(prBody);
+  
+  if (config) {
     core.info("✅ Successfully loaded validation config from PR body frontmatter");
-    return prBodyConfig;
+    return config;
   }
-
+  
   // If we reach here, we couldn't find any valid configuration
-  core.error("❌ No valid validation configuration found in any source");
-  core.error("Checked the following locations:");
+  core.warning("⚠️ No valid validation configuration found in any source");
+  core.warning("Checked the following locations:");
+  
   if (configFileInput) {
-    core.error(`  - Specified config_file: ${configFileInput}${configBranch ? ` (branch: ${configBranch})` : ""}`);
+    core.warning(`  - User specified config: ${configFileInput}${configBranch ? ` (branch: ${configBranch})` : ''}`);
   }
-  getTemplatePaths().forEach((p) => core.error(`  - ${p}${configBranch ? ` (branch: ${configBranch})` : ""}`));
-  core.error("  - PR body frontmatter");
-
+  
+  templatePaths.forEach((p) => {
+    core.warning(`  - ${p}${configBranch ? ` (on branch: ${configBranch})` : ''}`);
+    core.warning(`  - ${p} (on current branch)`);
+  });
+  
+  core.warning("  - PR body frontmatter");
+  
   // Return an empty configuration instead of throwing an error
-  // This way, if no config is found, no validation will be performed
   core.info("⚠️ Using empty configuration - no validations will be performed");
   return {};
 }
@@ -42225,6 +42254,66 @@ function validateLabels(pullRequest, errors) {
 }
 
 /**
+ * Validates that PR has the required number of assignees
+ * @param {Object} pullRequest - GitHub pull request object
+ * @param {number} minAssignees - Minimum number of assignees required
+ * @param {string[]} errors - Array to collect validation errors
+ */
+function validateAssignees(pullRequest, minAssignees, errors) {
+  core.debug(`Validating PR assignees. Required: ${minAssignees}, Found: ${pullRequest.assignees?.length || 0}`);
+  const assignees = pullRequest.assignees || [];
+
+  if (assignees.length < minAssignees) {
+    core.warning(`PR has only ${assignees.length} assignees, but ${minAssignees} are required`);
+
+    if (assignees.length === 0) {
+      errors.push(`This pull request requires at least ${minAssignees} assignee(s). Currently no one is assigned.`);
+    } else {
+      const assigneeNames = assignees.map((assignee) => assignee.login).join(", ");
+      errors.push(
+        `This pull request requires at least ${minAssignees} assignee(s). Currently assigned: ${assigneeNames}`
+      );
+    }
+  } else {
+    const assigneeNames = assignees.map((assignee) => assignee.login).join(", ");
+    core.info(`PR has sufficient assignees: ${assigneeNames}`);
+  }
+}
+
+/**
+ * Validates that PR has the required number of reviewers
+ * @param {Object} pullRequest - GitHub pull request object
+ * @param {number} minReviewers - Minimum number of reviewers required
+ * @param {string[]} errors - Array to collect validation errors
+ */
+function validateReviewers(pullRequest, minReviewers, errors) {
+  const requestedReviewers = [...(pullRequest.requested_reviewers || []), ...(pullRequest.requested_teams || [])];
+  const reviewCount = requestedReviewers.length;
+
+  core.debug(`Validating PR reviewers. Required: ${minReviewers}, Found: ${reviewCount}`);
+
+  if (reviewCount < minReviewers) {
+    core.warning(`PR has only ${reviewCount} reviewers requested, but ${minReviewers} are required`);
+
+    if (reviewCount === 0) {
+      errors.push(
+        `This pull request requires at least ${minReviewers} reviewer(s). Currently no reviews are requested.`
+      );
+    } else {
+      const reviewerNames = requestedReviewers
+        .map((reviewer) => reviewer.login || `${reviewer.name} (team)`)
+        .join(", ");
+      errors.push(
+        `This pull request requires at least ${minReviewers} reviewer(s). Currently requested: ${reviewerNames}`
+      );
+    }
+  } else {
+    const reviewerNames = requestedReviewers.map((reviewer) => reviewer.login || `${reviewer.name} (team)`).join(", ");
+    core.info(`PR has sufficient reviewers requested: ${reviewerNames}`);
+  }
+}
+
+/**
  * Validates that PR references an issue number
  * @param {string} prBody - PR description body
  * @param {string[]} errors - Array to collect validation errors
@@ -42288,7 +42377,7 @@ function getSectionContent(prBody, sectionName) {
  * Writes validation summary to GitHub Actions step summary
  * @param {Object[]} validationSteps - Array of validation steps and their results
  * @param {boolean} success - Whether overall validation was successful
- * @param {string[]} errors - Array of validation errors
+ * @param {string[]} errors - Array to collect validation errors
  */
 async function writeStepSummary(validationSteps, success, errors) {
   try {
@@ -42378,6 +42467,32 @@ async function validatePullRequest({ github, context }) {
     });
   } else {
     core.debug("Label validation skipped (not required in config)");
+  }
+
+  // Validate assignees if require_assignees is specified and > 0
+  if (validationConfig.require_assignees && validationConfig.require_assignees > 0) {
+    core.info(`👤 Validating PR has at least ${validationConfig.require_assignees} assignee(s)...`);
+    const errorCount = errors.length;
+    validateAssignees(context.payload.pull_request, validationConfig.require_assignees, errors);
+    validationSteps.push({
+      name: "Assignees",
+      status: errors.length === errorCount ? "✅ Passed" : "❌ Failed",
+    });
+  } else {
+    core.debug("Assignee validation skipped (not required in config)");
+  }
+
+  // Validate reviewers if require_reviewers is specified and > 0
+  if (validationConfig.require_reviewers && validationConfig.require_reviewers > 0) {
+    core.info(`👁️ Validating PR has at least ${validationConfig.require_reviewers} reviewer(s)...`);
+    const errorCount = errors.length;
+    validateReviewers(context.payload.pull_request, validationConfig.require_reviewers, errors);
+    validationSteps.push({
+      name: "Reviewers",
+      status: errors.length === errorCount ? "✅ Passed" : "❌ Failed",
+    });
+  } else {
+    core.debug("Reviewer validation skipped (not required in config)");
   }
 
   // Validate issue reference only if issue_number is explicitly set to "required"
