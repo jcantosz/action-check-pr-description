@@ -41,7 +41,20 @@ jobs:
         if: always()
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VALIDATION_RESULT: ${{ steps.validate-template.outputs.validation-result }}
+          VALIDATION_ERRORS: ${{ steps.validate-template.outputs.validation-errors }}
         run: |
-          echo 'body Validation result: ${{ steps.validate-template.outputs.validation-result }}\nErrors:\n${{ steps.validate-template.outputs.validation-errors }}' | gh pr comment "${{ github.event.pull_request.number }}" \
-            --repo "${{ github.repository }}" \
-            --body-file -
+          # Format the errors to display properly in the comment
+          FORMATTED_ERRORS=$(echo "$VALIDATION_ERRORS" | sed 's/$/\\n/' | tr -d '\n')
+          
+          # Create the comment content
+          COMMENT="### PR Validation Result: ${VALIDATION_RESULT^^}
+          
+          ${FORMATTED_ERRORS:-'No validation errors found.'}"
+          
+          # Post the comment
+          gh pr comment "${{ github.event.pull_request.number }}" \
+            --body "$COMMENT" \
+            --repo "${{ github.repository }}"
+
+
