@@ -17,7 +17,7 @@ jest.mock("../src/config.js", () => {
   const originalModule = jest.requireActual("../src/config.js");
   return {
     ...originalModule,
-    fetchFileFromGitHub: (...args) => mockFetchFileFromGitHub(...args)
+    fetchFileFromGitHub: (...args) => mockFetchFileFromGitHub(...args),
   };
 });
 
@@ -28,33 +28,33 @@ describe("Configuration Loading", () => {
   beforeEach(() => {
     jest.resetAllMocks();
     mockFetchFileFromGitHub.mockReset();
-    
+
     path.join.mockImplementation((...parts) => parts.join("/"));
     path.extname.mockImplementation((filePath) => {
-      if (typeof filePath !== 'string') return '';
-      if (filePath.endsWith('.yml')) return '.yml';
-      if (filePath.endsWith('.yaml')) return '.yaml';
-      if (filePath.endsWith('.md')) return '.md';
-      return '';
+      if (typeof filePath !== "string") return "";
+      if (filePath.endsWith(".yml")) return ".yml";
+      if (filePath.endsWith(".yaml")) return ".yaml";
+      if (filePath.endsWith(".md")) return ".md";
+      return "";
     });
     path.dirname.mockImplementation((filePath) => {
-      if (!filePath) return '.';
-      const parts = filePath.split('/');
+      if (!filePath) return ".";
+      const parts = filePath.split("/");
       parts.pop();
-      return parts.length ? parts.join('/') : '.';
+      return parts.length ? parts.join("/") : ".";
     });
     path.basename.mockImplementation((filePath) => {
-      if (!filePath) return '';
-      const parts = filePath.split('/');
+      if (!filePath) return "";
+      const parts = filePath.split("/");
       return parts[parts.length - 1];
     });
-    
+
     fs.readFileSync.mockImplementation(() => "issue_number: required");
     core.getInput.mockImplementation((name) => {
       if (name === "config_file") return ".github/pr-validation-config.yml";
       return "";
     });
-    
+
     // Clear any environment variables
     if (process.env.CUSTOM_CONFIG_PATH) {
       delete process.env.CUSTOM_CONFIG_PATH;
@@ -62,7 +62,7 @@ describe("Configuration Loading", () => {
     if (process.env.CONFIG_BRANCH) {
       delete process.env.CONFIG_BRANCH;
     }
-    
+
     // Mock fs.existsSync to make findLocalFileIgnoreCase work
     fs.existsSync.mockImplementation(() => true);
     // Mock fs.readdirSync for directory checks
@@ -75,7 +75,7 @@ describe("Configuration Loading", () => {
     fs.readFileSync.mockImplementation(() => {
       throw new Error("File not found");
     });
-    
+
     const prBody = `---
 validation:
   issue_number: required
@@ -98,9 +98,9 @@ require_reviewers: 2
 `;
     fs.readFileSync.mockReturnValueOnce(configData);
     fs.existsSync.mockImplementation(() => true);
-    
+
     const prBody = "PR content without front matter";
-    
+
     const config = await loadValidationConfig(prBody, mockGithub, mockContext);
     expect(config.issue_number).toBe("required");
     expect(config.require_labels).toBe(true);
@@ -110,30 +110,30 @@ require_reviewers: 2
 
   test("loads config from specified branch when available", async () => {
     process.env.CONFIG_BRANCH = "main";
-    
+
     // Make local file loading fail
     fs.existsSync.mockImplementation(() => false);
     fs.readFileSync.mockImplementation(() => {
       throw new Error("File not found");
     });
-    
+
     // Mock the GitHub API response
     mockFetchFileFromGitHub.mockResolvedValueOnce(`
 issue_number: required
 require_labels: true
 require_assignees: 3
 `);
-    
+
     const prBody = "PR content without front matter";
-    
+
     const config = await loadValidationConfig(prBody, mockGithub, mockContext);
     expect(config.issue_number).toBe("required");
     expect(config.require_labels).toBe(true);
     expect(config.require_assignees).toBe(3);
     expect(mockFetchFileFromGitHub).toHaveBeenCalledWith(
-      mockGithub, 
-      mockContext, 
-      ".github/pr-validation-config.yml", 
+      mockGithub,
+      mockContext,
+      ".github/pr-validation-config.yml",
       "main"
     );
   });
@@ -141,10 +141,10 @@ require_assignees: 3
   test("falls back to template on specified branch", async () => {
     process.env.CONFIG_BRANCH = "main";
     core.getInput.mockReturnValue(""); // No user-specified config file
-    
+
     // Make local file loading fail
     fs.existsSync.mockImplementation(() => false);
-    
+
     // Mock the GitHub API response for the template path
     mockFetchFileFromGitHub.mockImplementation((github, context, filePath) => {
       if (filePath === "./.github/pull_request_template.md") {
@@ -160,9 +160,9 @@ PR Template`);
       }
       return Promise.resolve(null);
     });
-    
+
     const prBody = "PR content without front matter";
-    
+
     const config = await loadValidationConfig(prBody, mockGithub, mockContext);
     expect(config.issue_number).toBe("required");
     expect(config.require_reviewers).toBe(4);
@@ -171,10 +171,10 @@ PR Template`);
   test("falls back to local template when branch template not found", async () => {
     process.env.CONFIG_BRANCH = "main";
     core.getInput.mockReturnValue(""); // No user-specified config file
-    
+
     // Make GitHub API call fail
     mockFetchFileFromGitHub.mockResolvedValue(null);
-    
+
     // Set up local template
     fs.existsSync.mockImplementation((path) => {
       return path.includes("pull_request_template.md");
@@ -194,9 +194,9 @@ PR Template`;
       }
       throw new Error("File not found");
     });
-    
+
     const prBody = "PR content without front matter";
-    
+
     const config = await loadValidationConfig(prBody, mockGithub, mockContext);
     expect(config.issue_number).toBe("required");
     expect(config.require_labels).toBe(true);
@@ -210,9 +210,9 @@ PR Template`;
       throw new Error("File not found");
     });
     mockFetchFileFromGitHub.mockResolvedValue(null);
-    
+
     const prBody = "PR content without any valid configuration";
-    
+
     const config = await loadValidationConfig(prBody, mockGithub, mockContext);
     expect(config).toEqual({});
   });
@@ -223,23 +223,23 @@ PR Template`;
     YAML.parse = jest.fn().mockImplementation(() => {
       throw new Error("Invalid YAML syntax");
     });
-    
+
     fs.readFileSync.mockReturnValueOnce("invalid: yaml: :");
-    
+
     const prBody = "No front matter";
-    
+
     const config = await loadValidationConfig(prBody, mockGithub, mockContext);
     expect(config).toEqual({});
-    
+
     // Restore the original function
     YAML.parse = originalParse;
   });
 
   test("follows priority order of config sources", async () => {
     process.env.CONFIG_BRANCH = "main";
-    
+
     // Make sure we check the priority order by having conflicting configs
-    
+
     // 1. Branch config (highest priority) - should win
     mockFetchFileFromGitHub.mockImplementation((github, context, filePath, branch) => {
       if (filePath === ".github/pr-validation-config.yml" && branch === "main") {
@@ -247,7 +247,7 @@ PR Template`;
       }
       return Promise.resolve(null);
     });
-    
+
     // 2. Local file config (medium priority) - should not be used
     fs.readFileSync.mockImplementation((path) => {
       if (path === ".github/pr-validation-config.yml") {
@@ -255,7 +255,7 @@ PR Template`;
       }
       throw new Error("File not found");
     });
-    
+
     // 3. PR body (lowest priority) - should not be used
     const prBody = `---
 validation:
@@ -263,13 +263,13 @@ validation:
   require_assignees: 3
 ---
 Content`;
-    
+
     const config = await loadValidationConfig(prBody, mockGithub, mockContext);
-    
+
     // Should use the config from the branch config file (highest priority)
     expect(config.issue_number).toBe("required");
     expect(config.require_assignees).toBe(1);
-    
+
     // Verify that fetchFileFromGitHub was called correctly
     expect(mockFetchFileFromGitHub).toHaveBeenCalledWith(
       mockGithub,

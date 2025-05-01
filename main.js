@@ -11,7 +11,7 @@ export async function run() {
     core.info("🚀 Starting PR Description Validator Action");
 
     // Get inputs
-    const configPath = core.getInput("config_path");
+    const configPath = core.getInput("config_file"); // Fix parameter name from config_path to config_file
     const configBranch = core.getInput("config_branch");
     const failOnError = core.getInput("fail_on_error") === "true";
     const token = core.getInput("github_token");
@@ -58,18 +58,26 @@ export async function run() {
     core.debug(`Action: ${github.context.payload.action || "unknown"}`);
     core.debug(`Actor: ${github.context.actor}`);
 
-    // Validate the pull request
-    const success = await validatePullRequest({
+    // Validate the pull request (collect errors)
+    const validationResult = await validatePullRequest({
       github: octokit,
       context: github.context,
+      collectErrors: true, // Signal to collect errors rather than failing immediately
     });
 
-    // Set outputs
+    const success = validationResult.success;
+    const errors = validationResult.errors || [];
+
+    // Set both outputs
     core.setOutput("validation-result", success ? "passed" : "failed");
+    core.setOutput("validation-errors", errors.join("\n"));
+
+    core.debug(`Setting output validation-errors: ${errors.join("\n")}`);
 
     if (!success && failOnError) {
       // The validatePullRequest function already calls core.setFailed internally
       core.info("❌ Action failing due to validation errors and fail-on-error=true");
+      core.setFailed(errors.join("\n"));
     } else if (!success) {
       // Just log the errors but don't fail the workflow
       core.warning("⚠️ PR validation had errors but the action is configured not to fail");
@@ -81,6 +89,10 @@ export async function run() {
     if (error.stack) {
       core.debug(`Error stack trace: ${error.stack}`);
     }
+
+    // Set outputs even in case of error
+    core.setOutput("validation-result", "failed");
+    core.setOutput("validation-errors", error.message);
   }
 
   core.info("🏁 PR Description Validator Action finished");

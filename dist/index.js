@@ -41767,7 +41767,7 @@ function getTemplatePaths() {
  * 2. Template paths on the specified branch (if config_branch provided)
  * 3. Template paths on the current branch
  * 4. PR body frontmatter
- * 
+ *
  * @param {string} prBody - The pull request description body
  * @param {Object} [github=null] - GitHub API client
  * @param {Object} [context=null] - GitHub Actions context
@@ -41776,25 +41776,25 @@ function getTemplatePaths() {
  */
 async function loadValidationConfig(prBody, github = null, context = null) {
   core.info("🔍 Loading validation configuration...");
-  
+
   const configFileInput = core.getInput("config_file");
   const configBranch = process.env.CONFIG_BRANCH || null;
-  
+
   if (configBranch) {
     core.info(`🌿 Config branch specified: ${configBranch}`);
   }
-  
+
   let config = null;
-  
+
   // Step 1: Check user provided config file
   if (configFileInput) {
     core.info(`📝 Step 1: Checking user specified config file: ${configFileInput}`);
-    
+
     // Try on specified branch if provided
     if (configBranch && github && context) {
       core.info(`  Attempting to load ${configFileInput} from branch: ${configBranch}`);
       const configLoader = getConfigLoaderForFile(configFileInput);
-      
+
       if (configLoader) {
         config = await configLoader(configFileInput, github, context);
         if (config) {
@@ -41804,13 +41804,13 @@ async function loadValidationConfig(prBody, github = null, context = null) {
         }
       }
     }
-    
+
     // Try locally (current branch)
     const localFilePath = findLocalFileIgnoreCase(configFileInput);
     if (localFilePath) {
       core.info(`  Found local config file: ${localFilePath}`);
       const configLoader = getConfigLoaderForFile(localFilePath);
-      
+
       if (configLoader) {
         config = await configLoader(localFilePath);
         if (config) {
@@ -41823,16 +41823,16 @@ async function loadValidationConfig(prBody, github = null, context = null) {
       core.warning(`⚠️ User specified config file not found locally: ${configFileInput}`);
     }
   }
-  
+
   // Step 2: Check template paths on the specified branch
   if (configBranch && github && context) {
     core.info(`📝 Step 2: Looking for PR templates on branch: ${configBranch}`);
     const templatePaths = getTemplatePaths();
-    
+
     for (const templatePath of templatePaths) {
       core.info(`  Checking ${templatePath} on branch ${configBranch}`);
       const configLoader = getConfigLoaderForFile(templatePath);
-      
+
       if (configLoader) {
         config = await configLoader(templatePath, github, context);
         if (config) {
@@ -41841,22 +41841,22 @@ async function loadValidationConfig(prBody, github = null, context = null) {
         }
       }
     }
-    
+
     core.warning(`⚠️ No valid PR template found on branch ${configBranch}`);
   }
-  
+
   // Step 3: Check template paths on the current branch
   core.info(`📝 Step 3: Looking for PR templates on the current branch`);
   const templatePaths = getTemplatePaths();
-  
+
   for (const templatePath of templatePaths) {
     core.info(`  Checking ${templatePath} locally`);
     const localFilePath = findLocalFileIgnoreCase(templatePath);
-    
+
     if (localFilePath) {
       core.info(`  Found local template: ${localFilePath}`);
       const configLoader = getConfigLoaderForFile(localFilePath);
-      
+
       if (configLoader) {
         config = await configLoader(localFilePath);
         if (config) {
@@ -41866,31 +41866,31 @@ async function loadValidationConfig(prBody, github = null, context = null) {
       }
     }
   }
-  
+
   // Step 4: Check PR body as last resort
   core.info(`📝 Step 4: Checking PR body frontmatter as last resort`);
   config = loadConfigFromPrBody(prBody);
-  
+
   if (config) {
     core.info("✅ Successfully loaded validation config from PR body frontmatter");
     return config;
   }
-  
+
   // If we reach here, we couldn't find any valid configuration
   core.warning("⚠️ No valid validation configuration found in any source");
   core.warning("Checked the following locations:");
-  
+
   if (configFileInput) {
-    core.warning(`  - User specified config: ${configFileInput}${configBranch ? ` (branch: ${configBranch})` : ''}`);
+    core.warning(`  - User specified config: ${configFileInput}${configBranch ? ` (branch: ${configBranch})` : ""}`);
   }
-  
+
   templatePaths.forEach((p) => {
-    core.warning(`  - ${p}${configBranch ? ` (on branch: ${configBranch})` : ''}`);
+    core.warning(`  - ${p}${configBranch ? ` (on branch: ${configBranch})` : ""}`);
     core.warning(`  - ${p} (on current branch)`);
   });
-  
+
   core.warning("  - PR body frontmatter");
-  
+
   // Return an empty configuration instead of throwing an error
   core.info("⚠️ Using empty configuration - no validations will be performed");
   return {};
@@ -42596,7 +42596,7 @@ async function run() {
     core.info("🚀 Starting PR Description Validator Action");
 
     // Get inputs
-    const configPath = core.getInput("config_path");
+    const configPath = core.getInput("config_file"); // Fix parameter name from config_path to config_file
     const configBranch = core.getInput("config_branch");
     const failOnError = core.getInput("fail_on_error") === "true";
     const token = core.getInput("github_token");
@@ -42643,18 +42643,26 @@ async function run() {
     core.debug(`Action: ${github.context.payload.action || "unknown"}`);
     core.debug(`Actor: ${github.context.actor}`);
 
-    // Validate the pull request
-    const success = await validatePullRequest({
+    // Validate the pull request (collect errors)
+    const validationResult = await validatePullRequest({
       github: octokit,
       context: github.context,
+      collectErrors: true, // Signal to collect errors rather than failing immediately
     });
 
-    // Set outputs
+    const success = validationResult.success;
+    const errors = validationResult.errors || [];
+
+    // Set both outputs
     core.setOutput("validation-result", success ? "passed" : "failed");
+    core.setOutput("validation-errors", errors.join("\n"));
+
+    core.debug(`Setting output validation-errors: ${errors.join("\n")}`);
 
     if (!success && failOnError) {
       // The validatePullRequest function already calls core.setFailed internally
       core.info("❌ Action failing due to validation errors and fail-on-error=true");
+      core.setFailed(errors.join("\n"));
     } else if (!success) {
       // Just log the errors but don't fail the workflow
       core.warning("⚠️ PR validation had errors but the action is configured not to fail");
@@ -42666,6 +42674,10 @@ async function run() {
     if (error.stack) {
       core.debug(`Error stack trace: ${error.stack}`);
     }
+
+    // Set outputs even in case of error
+    core.setOutput("validation-result", "failed");
+    core.setOutput("validation-errors", error.message);
   }
 
   core.info("🏁 PR Description Validator Action finished");
