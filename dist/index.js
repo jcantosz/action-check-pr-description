@@ -42420,18 +42420,18 @@ async function writeStepSummary(validationSteps, success, errors) {
  * @param {Object} params - The parameters object
  * @param {Object} params.github - GitHub API client
  * @param {Object} params.context - GitHub Actions context
- * @returns {Promise<boolean>} - True if validation passes, false otherwise
+ * @param {boolean} [params.collectErrors=false] - Whether to collect errors and return them
+ * @returns {Promise<Object|boolean>} - Object with success and errors if collectErrors is true, boolean otherwise
  */
-async function validatePullRequest({ github, context }) {
+async function validatePullRequest({ github, context, collectErrors = false }) {
   core.info("🔍 Starting PR validation process...");
-
   if (!context.payload.pull_request) {
-    core.setFailed("❌ This action can only be run on pull request events");
-    return false;
+    const errorMessage = "❌ This action can only be run on pull request events";
+    core.setFailed(errorMessage);
+    return collectErrors ? { success: false, errors: [errorMessage] } : false;
   }
 
   core.info(`📋 Validating PR #${context.payload.pull_request.number}: ${context.payload.pull_request.title}`);
-
   const prBody = context.payload.pull_request.body || "";
   let validationConfig;
 
@@ -42439,20 +42439,18 @@ async function validatePullRequest({ github, context }) {
     core.info("🔧 Loading validation configuration...");
     // Pass GitHub client and context to allow fetching from specified branch
     validationConfig = await loadValidationConfig(prBody, github, context);
-
     // Make sure we have a valid object
     if (!validationConfig) {
       validationConfig = {};
     }
-
     core.debug(`Loaded validation config: ${JSON.stringify(validationConfig, null, 2)}`);
   } catch (error) {
-    core.setFailed(`❌ Failed to parse validation config: ${error.message}`);
-    return false;
+    const errorMessage = `❌ Failed to parse validation config: ${error.message}`;
+    core.setFailed(errorMessage);
+    return collectErrors ? { success: false, errors: [errorMessage] } : false;
   }
 
   const errors = [];
-
   // Track validation steps for summary
   const validationSteps = [];
 
@@ -42559,15 +42557,18 @@ async function validatePullRequest({ github, context }) {
     errors.forEach((error) => {
       core.error(`  - ${error}`);
     });
-
+    
     // Print validation summary
     core.info("\n📊 Validation Summary:");
     validationSteps.forEach((step) => {
       core.info(`  ${step.status} ${step.name}`);
     });
-
-    core.setFailed(errors.join("\n"));
-    return false;
+    
+    if (!collectErrors) {
+      core.setFailed(errors.join("\n"));
+    }
+    
+    return collectErrors ? { success: false, errors } : false;
   }
 
   // Print validation summary
@@ -42575,9 +42576,9 @@ async function validatePullRequest({ github, context }) {
   validationSteps.forEach((step) => {
     core.info(`  ${step.status} ${step.name}`);
   });
-
+  
   core.info("✅ Pull request validation passed successfully!");
-  return true;
+  return collectErrors ? { success: true, errors: [] } : true;
 }
 
 
