@@ -29,6 +29,7 @@ jobs:
         run: npm ci
 
       - name: Validate PR Template
+        id: validate-template
         uses: jcantosz/action-check-pr-description@main
         with:
           config_file: .github/pr-validation-config.yml
