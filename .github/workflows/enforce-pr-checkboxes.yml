@@ -36,11 +36,12 @@ jobs:
           fail_on_error: true
           github_token: ${{ secrets.GITHUB_TOKEN }}
           config_branch: main
+
       - name: Comment validation result on PR
         if: always()
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh pr comment ${{ github.event.pull_request.number }} \
+          gh pr comment "${{ github.event.pull_request.number }}" \
             --body "Validation result: ${{ steps.validate-template.outputs.validation-result }}<br />Errors: ${{ steps.validate-template.outputs.validation-errors }}" \
-            --repo ${{ github.repository }}
+            --repo "${{ github.repository }}"
