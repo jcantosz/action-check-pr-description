@@ -2,12 +2,13 @@ name: PR Template Validation
 
 on:
   pull_request:
-    types: [opened, edited, synchronize, reopened]
+    types: [opened, edited, synchronize, reopened, assigned, unassigned, review_requested, review_request_removed]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-config-yaml
   cancel-in-progress: true
-
+env:
+  ACTIONS_STEP_DEBUG: true
 jobs:
   validate-template:
     runs-on: ubuntu-latest
@@ -35,6 +36,7 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           config_branch: main
       - name: Comment validation result on PR
+        if: always()
         run: |
           gh pr comment ${{ github.event.pull_request.number }} \
             --body "Validation result: ${{ steps.validate-template.outputs.validation-result }}\nErrors: ${{ steps.validate-template.outputs.validation-errors }}" \
