@@ -9,6 +9,7 @@ This action helps maintain high-quality pull requests by validating:
 - Semantic commit messages
 - Issue references
 - Label requirements
+- Required assignees and reviewers
 
 ## Usage
 
@@ -48,18 +49,20 @@ Add YAML front matter, in a comment, to your PR template file (default: `.github
 validation:
   issue_number: required
   require_labels: true
-semantic_commits:
-  enabled: true
-  types:
-  - feat
-  - fix
-  - docs
-  # ... other types
-sections:
-  "Type of review":
-    rule: any_checked
-  "Review Checklist":
-    rule: any_checked
+  semantic_commits:
+    enabled: true
+    types:
+    - feat
+    - fix
+    - docs
+    # ... other types
+  require_assignees: 1
+  require_reviewers: 2
+  sections:
+    "Type of review":
+      rule: any_checked
+    "Review Checklist":
+      rule: any_checked
 
 ---
 -->
@@ -81,6 +84,8 @@ semantic_commits:
     - feat
     - fix
     # ... other types
+require_assignees: 1
+require_reviewers: 2
 sections:
   "Type of review":
     rule: any_checked
@@ -101,6 +106,8 @@ As a last resort, if the specified configuration file is not found, the action w
 | `semantic_commits.enabled`        | When `true`, commit messages must follow semantic conventions                  |
 | `semantic_commits.types`          | List of allowed commit types (e.g., feat, fix, docs, etc.)                     |
 | `semantic_commits.allowed_scopes` | Optional list of allowed scopes for commits                                    |
+| `require_assignees`               | Minimum number of users assigned to the pull request                           |
+| `require_reviewers`               | Minimum number of requested reviewers for the pull request                     |
 | `sections`                        | Map of PR sections to validate, with each having validation rules              |
 
 ### Section Rules
@@ -116,6 +123,7 @@ Each section can have the following rules:
 | Input           | Description                                                                       | Required | Default                            |
 | --------------- | --------------------------------------------------------------------------------- | -------- | ---------------------------------- |
 | `config_file`   | Path to configuration file (.md with frontmatter or .yml/.yaml for direct config) | No       | `.github/PULL_REQUEST_TEMPLATE.md` |
+| `config_branch` | Branch to fetch config from (falls back to current branch if not found)           | No       | ``                                 |
 | `fail_on_error` | Whether to fail the workflow if validation fails                                  | No       | `true`                             |
 | `github_token`  | GitHub token for API access                                                       | No       | `${{ github.token }}`              |
 

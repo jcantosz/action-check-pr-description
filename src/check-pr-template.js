@@ -22,6 +22,66 @@ function validateLabels(pullRequest, errors) {
 }
 
 /**
+ * Validates that PR has the required number of assignees
+ * @param {Object} pullRequest - GitHub pull request object
+ * @param {number} minAssignees - Minimum number of assignees required
+ * @param {string[]} errors - Array to collect validation errors
+ */
+function validateAssignees(pullRequest, minAssignees, errors) {
+  core.debug(`Validating PR assignees. Required: ${minAssignees}, Found: ${pullRequest.assignees?.length || 0}`);
+  const assignees = pullRequest.assignees || [];
+
+  if (assignees.length < minAssignees) {
+    core.warning(`PR has only ${assignees.length} assignees, but ${minAssignees} are required`);
+
+    if (assignees.length === 0) {
+      errors.push(`This pull request requires at least ${minAssignees} assignee(s). Currently no one is assigned.`);
+    } else {
+      const assigneeNames = assignees.map((assignee) => assignee.login).join(", ");
+      errors.push(
+        `This pull request requires at least ${minAssignees} assignee(s). Currently assigned: ${assigneeNames}`
+      );
+    }
+  } else {
+    const assigneeNames = assignees.map((assignee) => assignee.login).join(", ");
+    core.info(`PR has sufficient assignees: ${assigneeNames}`);
+  }
+}
+
+/**
+ * Validates that PR has the required number of reviewers
+ * @param {Object} pullRequest - GitHub pull request object
+ * @param {number} minReviewers - Minimum number of reviewers required
+ * @param {string[]} errors - Array to collect validation errors
+ */
+function validateReviewers(pullRequest, minReviewers, errors) {
+  const requestedReviewers = [...(pullRequest.requested_reviewers || []), ...(pullRequest.requested_teams || [])];
+  const reviewCount = requestedReviewers.length;
+
+  core.debug(`Validating PR reviewers. Required: ${minReviewers}, Found: ${reviewCount}`);
+
+  if (reviewCount < minReviewers) {
+    core.warning(`PR has only ${reviewCount} reviewers requested, but ${minReviewers} are required`);
+
+    if (reviewCount === 0) {
+      errors.push(
+        `This pull request requires at least ${minReviewers} reviewer(s). Currently no reviews are requested.`
+      );
+    } else {
+      const reviewerNames = requestedReviewers
+        .map((reviewer) => reviewer.login || `${reviewer.name} (team)`)
+        .join(", ");
+      errors.push(
+        `This pull request requires at least ${minReviewers} reviewer(s). Currently requested: ${reviewerNames}`
+      );
+    }
+  } else {
+    const reviewerNames = requestedReviewers.map((reviewer) => reviewer.login || `${reviewer.name} (team)`).join(", ");
+    core.info(`PR has sufficient reviewers requested: ${reviewerNames}`);
+  }
+}
+
+/**
  * Validates that PR references an issue number
  * @param {string} prBody - PR description body
  * @param {string[]} errors - Array to collect validation errors
@@ -85,7 +145,7 @@ function getSectionContent(prBody, sectionName) {
  * Writes validation summary to GitHub Actions step summary
  * @param {Object[]} validationSteps - Array of validation steps and their results
  * @param {boolean} success - Whether overall validation was successful
- * @param {string[]} errors - Array of validation errors
+ * @param {string[]} errors - Array to collect validation errors
  */
 async function writeStepSummary(validationSteps, success, errors) {
   try {
@@ -178,6 +238,32 @@ async function validatePullRequest({ github, context }) {
     core.debug("Label validation skipped (not required in config)");
   }
 
+  // Validate assignees if require_assignees is specified and > 0
+  if (validationConfig.require_assignees && validationConfig.require_assignees > 0) {
+    core.info(`👤 Validating PR has at least ${validationConfig.require_assignees} assignee(s)...`);
+    const errorCount = errors.length;
+    validateAssignees(context.payload.pull_request, validationConfig.require_assignees, errors);
+    validationSteps.push({
+      name: "Assignees",
+      status: errors.length === errorCount ? "✅ Passed" : "❌ Failed",
+    });
+  } else {
+    core.debug("Assignee validation skipped (not required in config)");
+  }
+
+  // Validate reviewers if require_reviewers is specified and > 0
+  if (validationConfig.require_reviewers && validationConfig.require_reviewers > 0) {
+    core.info(`👁️ Validating PR has at least ${validationConfig.require_reviewers} reviewer(s)...`);
+    const errorCount = errors.length;
+    validateReviewers(context.payload.pull_request, validationConfig.require_reviewers, errors);
+    validationSteps.push({
+      name: "Reviewers",
+      status: errors.length === errorCount ? "✅ Passed" : "❌ Failed",
+    });
+  } else {
+    core.debug("Reviewer validation skipped (not required in config)");
+  }
+
   // Validate issue reference only if issue_number is explicitly set to "required"
   if (validationConfig.issue_number === "required") {
     core.info("🔗 Validating issue reference...");
@@ -263,4 +349,11 @@ async function validatePullRequest({ github, context }) {
   return true;
 }
 
-export { validatePullRequest, validateLabels, validateIssueReference, getSectionContent };
+export {
+  validatePullRequest,
+  validateLabels,
+  validateIssueReference,
+  validateAssignees,
+  validateReviewers,
+  getSectionContent,
+};

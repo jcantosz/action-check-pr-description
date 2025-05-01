@@ -1,31 +1,21 @@
-<!--
+## <!--
+
+issue_number: required
+require_labels: true
+semantic_commits:
+enabled: true
+types: - feat - fix - docs - style - refactor - perf - test - build - ci - chore - revert
+sections:
+"Type of review":
+rule: any_checked
+"Review Checklist":
+rule: any_checked
+"Other checklist":
+rule: all_checked
+enforce_nested: true
+
 ---
-validation:
-  issue_number: required
-  require_labels: true
-  semantic_commits:
-    enabled: true
-    types:
-      - feat
-      - fix
-      - docs
-      - style
-      - refactor
-      - perf
-      - test
-      - build
-      - ci
-      - chore
-      - revert
-  sections:
-    "Type of review":
-      rule: any_checked
-    "Review Checklist":
-      rule: any_checked
-    "Other checklist":
-      rule: all_checked
-      enforce_nested: true
----
+
 -->
 
 ## Description

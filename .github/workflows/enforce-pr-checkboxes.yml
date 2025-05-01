@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: read
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -34,3 +34,8 @@ jobs:
           fail_on_error: true
           github_token: ${{ secrets.GITHUB_TOKEN }}
           config_branch: main
+      - name: Comment validation result on PR
+        run: |
+          gh pr comment ${{ github.event.pull_request.number }} \
+            --body "Validation result: ${{ steps.validate-template.outputs.validation-result }}\nErrors: ${{ steps.validate-template.outputs.validation-errors }}" \
+            --repo ${{ github.repository }}

@@ -1,5 +1,7 @@
 issue_number: required
 require_labels: true
+require_assignees: 1
+require_reviewers: 2
 semantic_commits:
   enabled: true
   types:

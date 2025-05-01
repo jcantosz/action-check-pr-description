@@ -3,6 +3,8 @@ import {
   validatePullRequest,
   validateLabels,
   validateIssueReference,
+  validateAssignees,
+  validateReviewers,
   getSectionContent,
 } from "../src/check-pr-template.js";
 
@@ -21,6 +23,9 @@ describe("PR Template Validation", () => {
           body: "",
           number: 1,
           labels: [],
+          assignees: [],
+          requested_reviewers: [],
+          requested_teams: []
         },
       },
     };
@@ -257,5 +262,77 @@ More content
 
     expect(getSectionContent(prBody, "Section (with parentheses)")).toBe("Content here");
     expect(getSectionContent(prBody, "Section [with brackets]")).toBe("More content");
+  });
+
+  test("validates assignees when minimum number is required", () => {
+    const pr = { assignees: [] };
+    const errors = [];
+    validateAssignees(pr, 2, errors);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toMatch(/requires at least 2 assignee/);
+  });
+
+  test("passes assignee validation when sufficient assignees are present", () => {
+    const pr = { 
+      assignees: [
+        { login: "user1" },
+        { login: "user2" }
+      ] 
+    };
+    const errors = [];
+    validateAssignees(pr, 2, errors);
+    expect(errors).toHaveLength(0);
+  });
+
+  test("validates reviewers when minimum number is required", () => {
+    const pr = { 
+      requested_reviewers: [],
+      requested_teams: []
+    };
+    const errors = [];
+    validateReviewers(pr, 2, errors);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toMatch(/requires at least 2 reviewer/);
+  });
+
+  test("passes reviewer validation when sufficient reviewers are requested", () => {
+    const pr = { 
+      requested_reviewers: [
+        { login: "user1" },
+        { login: "user2" }
+      ],
+      requested_teams: []
+    };
+    const errors = [];
+    validateReviewers(pr, 2, errors);
+    expect(errors).toHaveLength(0);
+  });
+
+  test("counts both individual and team reviewers", () => {
+    const pr = { 
+      requested_reviewers: [
+        { login: "user1" }
+      ],
+      requested_teams: [
+        { name: "team1" }
+      ]
+    };
+    const errors = [];
+    validateReviewers(pr, 2, errors);
+    expect(errors).toHaveLength(0);
+  });
+
+  test("validates PR with both assignee and reviewer requirements", async () => {
+    mockContext.payload.pull_request.body = `---
+validation:
+  require_labels: true
+  require_assignees: 2
+  require_reviewers: 1
+---
+Content`;
+
+    await expect(async () => {
+      await validatePullRequest({ github: mockGithub, context: mockContext });
+    }).rejects.toThrow(/requires at least 2 assignee/);
   });
 });
