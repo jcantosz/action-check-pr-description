@@ -7,8 +7,7 @@ on:
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-config-yaml
   cancel-in-progress: true
-env:
-  ACTIONS_STEP_DEBUG: true
+
 jobs:
   validate-template:
     runs-on: ubuntu-latest
@@ -44,25 +43,26 @@ jobs:
           VALIDATION_RESULT: ${{ steps.validate-template.outputs.validation-result }}
           VALIDATION_ERRORS: ${{ steps.validate-template.outputs.validation-errors }}
         run: |
-          # Convert \n in errors to actual markdown line breaks
-          FORMATTED_ERRORS=$(echo "$VALIDATION_ERRORS" | sed 's/\\n/  \n/g' | sed 's/•/*/g')
+          # Create a temporary file for the comment
+          COMMENT_FILE=$(mktemp)
           
-          # Create the comment content with proper markdown formatting
+          # Write the header to the comment file
           if [ "$VALIDATION_RESULT" == "passed" ]; then
-            COMMENT="### ✅ PR Validation Result: PASSED
-            
-            All validation checks have passed successfully!"
+            echo "### ✅ PR Validation Result: PASSED" > "$COMMENT_FILE"
+            echo "" >> "$COMMENT_FILE"
+            echo "All validation checks have passed successfully!" >> "$COMMENT_FILE"
           else
-            COMMENT="### ❌ PR Validation Result: FAILED
+            echo "### ❌ PR Validation Result: FAILED" > "$COMMENT_FILE"
+            echo "" >> "$COMMENT_FILE"
+            echo "**The following issues were found:**" >> "$COMMENT_FILE"
+            echo "" >> "$COMMENT_FILE"
             
-            **The following issues were found:**
-            
-            $FORMATTED_ERRORS"
+            # Replace \n with actual newlines and prefix each line with "- "
+            echo "$VALIDATION_ERRORS" | sed 's/\\n/\n/g' | sed 's/^/- /' >> "$COMMENT_FILE"
           fi
           
-          # Post the comment
-          gh pr comment "${{ github.event.pull_request.number }}" \
-            --body "$COMMENT" \
-            --repo "${{ github.repository }}"
-
-
+          # Post the comment using the file content
+          gh pr comment "${{ github.event.pull_request.number }}" --body-file "$COMMENT_FILE" --repo "${{ github.repository }}"
+          
+          # Clean up
+          rm "$COMMENT_FILE"
