@@ -44,13 +44,21 @@ jobs:
           VALIDATION_RESULT: ${{ steps.validate-template.outputs.validation-result }}
           VALIDATION_ERRORS: ${{ steps.validate-template.outputs.validation-errors }}
         run: |
-          # Format the errors to display properly in the comment
-          FORMATTED_ERRORS=$(echo "$VALIDATION_ERRORS" | sed 's/$/\\n/' | tr -d '\n')
+          # Convert \n in errors to actual markdown line breaks
+          FORMATTED_ERRORS=$(echo "$VALIDATION_ERRORS" | sed 's/\\n/  \n/g' | sed 's/•/*/g')
           
-          # Create the comment content
-          COMMENT="### PR Validation Result: ${VALIDATION_RESULT^^}
-          
-          ${FORMATTED_ERRORS:-'No validation errors found.'}"
+          # Create the comment content with proper markdown formatting
+          if [ "$VALIDATION_RESULT" == "passed" ]; then
+            COMMENT="### ✅ PR Validation Result: PASSED
+            
+            All validation checks have passed successfully!"
+          else
+            COMMENT="### ❌ PR Validation Result: FAILED
+            
+            **The following issues were found:**
+            
+            $FORMATTED_ERRORS"
+          fi
           
           # Post the comment
           gh pr comment "${{ github.event.pull_request.number }}" \
